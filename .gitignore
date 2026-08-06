@@ -1,4 +1,4 @@
-# секреты — никогда в гит (креды Fink, пароли ClickHouse)
+# secrets — never in git (Fink credentials, ClickHouse passwords)
 .env
 deploy/.env
 
@@ -11,7 +11,7 @@ __pycache__/
 node_modules/
 services/dashboard/dist/
 
-# данные (архивы алертов ZTF для replay — гигабайты)
+# data (ZTF alert archives for replay — gigabytes)
 data/
 
 # IDE

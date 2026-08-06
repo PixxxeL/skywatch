@@ -1,39 +1,40 @@
-# SkyWatch DEV — только инфраструктура (запускается в VirtualBox VM).
-# Код (коннектор, консьюмер, API, дашборд) крутится на Windows-хосте
-# и ходит сюда через проброс портов VirtualBox (127.0.0.1).
+# SkyWatch DEV — infrastructure only (runs in a VM).
+# The code (connector, consumer, API, dashboard) runs on the host
+# and reaches these services through forwarded ports (127.0.0.1).
 #
 #   cp .env.example .env   # KAFKA_EXTERNAL_HOST=127.0.0.1
 #   docker compose -f docker-compose.dev.yml up -d
 
 services:
-  # ── Kafka в режиме KRaft (без ZooKeeper: с Kafka 3.x внешний координатор не нужен) ──
-  # Официальный образ apache/kafka (bitnami/* удалены с Docker Hub в 2025).
+  # ── Kafka in KRaft mode (no ZooKeeper: since Kafka 3.x an external coordinator is not needed) ──
+  # Official apache/kafka image (bitnami/* images were removed from Docker Hub in 2025).
   kafka:
     image: apache/kafka:3.9.1
     environment:
       KAFKA_NODE_ID: "1"
-      KAFKA_PROCESS_ROLES: broker,controller   # один узел = и брокер, и контроллер
+      KAFKA_PROCESS_ROLES: broker,controller   # single node = both broker and controller
       KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:9093
       KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
       #
-      # ГРАБЛИ №1 (см. docs/BASICS.md): у брокера ДВА листенера.
-      # INTERNAL — для контейнеров внутри docker-сети (kafka:9092),
-      # EXTERNAL — для кода на Windows-хосте (через проброс портов = 127.0.0.1:29092).
-      # Kafka сообщает клиенту advertised-адрес; если он недостижим — клиент виснет.
+      # PITFALL #1: the broker has TWO listeners.
+      # INTERNAL — for containers inside the docker network (kafka:9092),
+      # EXTERNAL — for code on the host (through port forwarding = 127.0.0.1:29092).
+      # Kafka gives the client its advertised address; if that address is
+      # unreachable, the client hangs.
       KAFKA_LISTENERS: INTERNAL://:9092,EXTERNAL://:29092,CONTROLLER://:9093
       KAFKA_ADVERTISED_LISTENERS: INTERNAL://kafka:9092,EXTERNAL://${KAFKA_EXTERNAL_HOST}:${KAFKA_EXTERNAL_PORT}
       KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: INTERNAL:PLAINTEXT,EXTERNAL:PLAINTEXT,CONTROLLER:PLAINTEXT
       KAFKA_INTER_BROKER_LISTENER_NAME: INTERNAL
       #
-      # Учебный одноброкерный кластер: фактор репликации 1 (см. вопросы в docs/BASICS.md).
+      # Single-broker cluster: replication factor 1.
       KAFKA_DEFAULT_REPLICATION_FACTOR: "1"
       KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: "1"
       KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: "1"
       KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: "1"
-      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "false"  # топики только явно, руками
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "false"  # topics are created explicitly only
       #
-      # Куда писать данные (совпадает с volume ниже); CLUSTER_ID — любой валидный
-      # base64-uuid, фиксируем, чтобы формат хранилища был воспроизводимым.
+      # Data directory (matches the volume below); CLUSTER_ID — any valid
+      # base64 uuid, pinned so the storage format is reproducible.
       KAFKA_LOG_DIRS: /var/lib/kafka/data
       CLUSTER_ID: 4L6g3nShT-eMCtK--X86sw
     ports:
@@ -46,10 +47,10 @@ services:
       timeout: 10s
       retries: 10
 
-  # Топики в dev создаются РУКАМИ (учебное упражнение, см. README);
-  # в prod это делает одноразовый контейнер kafka-init (docker-compose.prod.yml).
+  # In dev the topics are created MANUALLY (see kafka/create-topics.sh for the reference);
+  # in prod a one-shot kafka-init container does it (docker-compose.prod.yml).
 
-  # Веб-интерфейс: топики, сообщения, consumer groups, lag. Главный учебный инструмент.
+  # Web UI: topics, messages, consumer groups, lag.
   kafka-ui:
     image: provectuslabs/kafka-ui:latest
     depends_on:
@@ -68,12 +69,12 @@ services:
       CLICKHOUSE_PASSWORD: ${CLICKHOUSE_PASSWORD}
       CLICKHOUSE_DEFAULT_ACCESS_MANAGEMENT: "1"
     ports:
-      - "8123:8123"   # HTTP-интерфейс (и веб-консоль /play)
+      - "8123:8123"   # HTTP interface (and the /play web console)
     volumes:
       - ch_data:/var/lib/clickhouse
-      # Схема БД в dev накатывается РУКАМИ (учебное упражнение, см. README).
-      # В prod каталог clickhouse/init/ монтируется в /docker-entrypoint-initdb.d
-      # и выполняется автоматически при первом старте (docker-compose.prod.yml).
+      # In dev the DB schema is applied MANUALLY (see clickhouse/init/01_schema.sql).
+      # In prod the clickhouse/init/ directory is mounted into /docker-entrypoint-initdb.d
+      # and runs automatically on the first start (docker-compose.prod.yml).
     ulimits:
       nofile: { soft: 262144, hard: 262144 }
     healthcheck:

@@ -1,10 +1,10 @@
-"""Конверт (envelope) — единый формат сообщений во внутренних топиках.
+"""Envelope — the common format of messages in the internal topics.
 
-Зачем: консьюмерам не нужно знать про каждый источник. Они читают конверт
-(кто, что, когда), а тело события (payload) разбирает тот, кому оно нужно,
-по схеме, определяемой парой (source, event_type, schema_version).
+Why: consumers do not need to know about every source. They read the envelope
+(who, what, when), while the event body (payload) is parsed only by whoever
+needs it, using the schema identified by (source, event_type, schema_version).
 
-Сериализация — Avro (см. docs/BASICS.md, «Avro»). Схемы лежат в schemas/*.avsc.
+Serialization — Avro. Schemas live in schemas/*.avsc.
 """
 
 import io
@@ -14,12 +14,12 @@ from pathlib import Path
 
 import fastavro
 
-# schemas/ лежит в корне репозитория: services/common/skywatch_common/ -> ../../..
+# schemas/ lives in the repo root: services/common/skywatch_common/ -> ../../..
 SCHEMAS_DIR = Path(__file__).resolve().parents[3] / "schemas"
 
 
 def load_schema(name: str) -> dict:
-    """Читает и парсит Avro-схему из schemas/<name>.avsc."""
+    """Reads and parses an Avro schema from schemas/<name>.avsc."""
     return fastavro.schema.load_schema(SCHEMAS_DIR / f"{name}.avsc")
 
 
@@ -43,8 +43,9 @@ class Envelope:
 
 
 def _dumps(record: dict, schema: dict) -> bytes:
-    """dict -> Avro-байты (schemaless: схема не пишется в сообщение,
-    обе стороны берут её из репозитория; версия едет в конверте)."""
+    """dict -> Avro bytes (schemaless: the schema is not written into the
+    message, both sides take it from the repo; the version travels in the
+    envelope)."""
     buf = io.BytesIO()
     fastavro.schemaless_writer(buf, schema, record)
     return buf.getvalue()

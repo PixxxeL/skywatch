@@ -1,5 +1,5 @@
-# Собирается из КОРНЯ репо (см. build.context в docker-compose.yml):
-# так в контекст попадают services/common и schemas, общие для всех сервисов.
+# Built from the repo ROOT (see build.context in docker-compose.yml):
+# this puts services/common and schemas, shared by all services, into the context.
 FROM python:3.12-slim
 WORKDIR /app
 COPY services/consumer-alerts/requirements.txt .

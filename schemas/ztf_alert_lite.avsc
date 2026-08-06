@@ -2,7 +2,7 @@
   "type": "record",
   "name": "ZtfAlertLite",
   "namespace": "skywatch.ztf",
-  "doc": "Выжимка из полного алерта ZTF (в полном ~60 полей и вырезки изображений). Версия 1.",
+  "doc": "Compact subset of the full ZTF alert (the full one has ~60 fields and image cutouts). Version 1.",
   "fields": [
     {"name": "object_id", "type": "string"},
     {"name": "candidate_id", "type": "long"},
@@ -14,6 +14,6 @@
     {"name": "fid", "type": "int"},
     {"name": "classification", "type": "string", "default": "unknown"},
     {"name": "class_score", "type": "float", "default": 0.0},
-    {"name": "raw", "type": "string", "doc": "исходное событие как JSON-строка"}
+    {"name": "raw", "type": "string", "doc": "original event as a JSON string"}
   ]
 }

@@ -1,95 +1,97 @@
-# SkyWatch — архитектура
+# SkyWatch — architecture
 
-## Общая схема
+## Overview
 
 ```
-внешние источники                      SkyWatch
+external sources                       SkyWatch
 ─────────────────                      ────────────────────────────────────────────
 Fink (Kafka, Avro)  ──► connector-ztf ──► Kafka: ingest.ztf.alerts ─┬─► consumer-alerts ──► ClickHouse
-GCN (Kafka)  [позже]──► connector-gcn ──► Kafka: ingest.gcn.notices ┘        (group: ch-writer)
-NOAA (HTTP)  [позже]──► connector-noaa ─► Kafka: ingest.noaa.spaceweather
-                                          Kafka: ingest.deadletter ◄── битые сообщения
+GCN (Kafka)  [later]──► connector-gcn ──► Kafka: ingest.gcn.notices ┘        (group: ch-writer)
+NOAA (HTTP)  [later]──► connector-noaa ─► Kafka: ingest.noaa.spaceweather
+                                          Kafka: ingest.deadletter ◄── malformed messages
 
 ClickHouse ──► query-api (FastAPI) ──► dashboard (Vue) ── nginx (prod)
 ```
 
-Принцип: **коннектор** отвечает за общение с внешним миром и нормализацию,
-**внутренняя Kafka** — единая шина, **консьюмеры** ничего не знают об источниках.
+The principle: a **connector** talks to the outside world and normalizes the data,
+the **internal Kafka** is a single bus, and **consumers** know nothing about the sources.
 
-## Конвенции
+## Conventions
 
-### Топики
+### Topics
 
-`ingest.<source>.<type>` — например `ingest.ztf.alerts`. Партиций: 3 (учебно; в проде считается
-от пропускной способности). Ключ сообщения — стабильный ID сущности (для ZTF — `objectId`),
-чтобы события одного объекта шли в одну партицию и сохраняли порядок.
+`ingest.<source>.<type>` — e.g. `ingest.ztf.alerts`. 3 partitions (enough at this scale;
+in production the number is derived from throughput). The message key is a stable entity ID
+(for ZTF — `objectId`), so that all events of one object land in one partition and keep
+their order.
 
-### Конверт (envelope)
+### Envelope
 
-Все внутренние сообщения — Avro по схеме [schemas/envelope.avsc](schemas/envelope.avsc):
+All internal messages are Avro, schema [schemas/envelope.avsc](schemas/envelope.avsc):
 
-| Поле            | Тип    | Смысл                                            |
+| Field           | Type   | Meaning                                          |
 |-----------------|--------|--------------------------------------------------|
 | `source`        | string | `ztf`, `gcn`, ...                                |
 | `event_type`    | string | `alert`, `notice`, ...                           |
-| `event_id`      | string | уникальный ID события у источника                |
-| `event_ts`      | long   | время события (timestamp-millis, UTC)            |
-| `ingest_ts`     | long   | время приёма коннектором                         |
-| `schema_version`| int    | версия схемы payload                             |
-| `payload`       | bytes  | нормализованное тело события (Avro своей схемы)  |
+| `event_id`      | string | unique event ID assigned by the source           |
+| `event_ts`      | long   | event time (timestamp-millis, UTC)               |
+| `ingest_ts`     | long   | time the connector received the event            |
+| `schema_version`| int    | payload schema version                           |
+| `payload`       | bytes  | normalized event body (Avro, its own schema)     |
 
-Payload для ZTF — [schemas/ztf_alert_lite.avsc](schemas/ztf_alert_lite.avsc): выжимка из полного
-алерта ZTF (~60 полей и вырезки изображений нам не нужны). Схемы лежат файлами в репо и
-подключаются к сервисам через `services/common`; Schema Registry сознательно не используем
-(меньше движущихся частей; конверт несёт `schema_version`).
+The ZTF payload is [schemas/ztf_alert_lite.avsc](schemas/ztf_alert_lite.avsc): a compact
+subset of the full ZTF alert (we don't need all ~60 fields and the image cutouts). Schemas
+live as files in the repo and are loaded by services via `services/common`; a Schema Registry
+is deliberately not used (fewer moving parts; the envelope carries `schema_version`).
 
-### Гарантии доставки
+### Delivery guarantees
 
-At-least-once: консьюмер коммитит оффсеты **после** успешной вставки батча в ClickHouse.
-Дубликаты гасятся на стороне ClickHouse: `ReplacingMergeTree` по `(object_id, candidate_id)`
-+ `FINAL`/`GROUP BY` в запросах, где важна точность.
+At-least-once: the consumer commits offsets **after** the batch is successfully inserted
+into ClickHouse. Duplicates are handled on the ClickHouse side: `ReplacingMergeTree` over
+`(object_id, candidate_id)` plus `FINAL`/`GROUP BY` in queries where exactness matters.
 
-Сообщение, которое не удалось распарсить, уходит в `ingest.deadletter` с заголовками
-`error`, `origin_topic` — и коммитится (не блокирует поток).
+A message that cannot be parsed goes to `ingest.deadletter` with headers
+`error`, `src_topic`, `src_partition`, `src_offset` — and is committed
+(it does not block the stream).
 
 ## ClickHouse
 
-База `skywatch`, DDL: [deploy/clickhouse/init/01_schema.sql](deploy/clickhouse/init/01_schema.sql).
+Database `skywatch`, DDL: [deploy/clickhouse/init/01_schema.sql](deploy/clickhouse/init/01_schema.sql).
 
 - `ztf_alerts` — ReplacingMergeTree, `PARTITION BY toYYYYMM(event_ts)`,
-  `ORDER BY (object_id, candidate_id)`. Сырой алерт хранится в `raw` (ZSTD) — можно
-  перепарсить историю при изменении схемы.
-- `alerts_daily` — SummingMergeTree + материализованное вью: счётчики по дням/классификациям
-  считаются в момент вставки.
+  `ORDER BY (object_id, candidate_id)`. The raw alert is kept in `raw` (ZSTD) so history
+  can be re-parsed if the schema changes.
+- `alerts_daily` — SummingMergeTree + a materialized view: per-day/per-classification
+  counters are computed at insert time.
 
-## Сервисы
+## Services
 
-- **connector-ztf** — единственный сервис, знающий про Fink. Три режима источника
-  (fink / replay / synthetic) за общим интерфейсом `AlertSource` — Fink-режим можно
-  включить позже, не меняя остального кода.
-- **consumer-alerts** — батчер: копит до `BATCH_SIZE` сообщений или `BATCH_TIMEOUT_S` секунд,
-  вставляет одним INSERT, коммитит оффсеты.
-- **query-api** — тонкий слой SQL→JSON. Никакой бизнес-логики, только параметризованные запросы.
+- **connector-ztf** — the only service that knows about Fink. Source modes
+  (fink / synthetic, archive replay planned) behind a common source interface —
+  modes are switched by configuration, the rest of the code stays the same.
+- **consumer-alerts** — a batcher: accumulates up to `BATCH_SIZE` messages or
+  `BATCH_TIMEOUT_S` seconds, inserts them as a single INSERT, then commits offsets.
+- **query-api** — a thin SQL→JSON layer. No business logic, only parameterized queries.
 
-## Как добавить новый источник (например GCN)
+## How to add a new source (e.g. GCN)
 
-1. Скопировать `services/connector-ztf` → `services/connector-gcn`, реализовать свой `Source`
-   (для GCN — консьюмер `gcn-kafka`; для HTTP-источников — поллер).
-2. Описать payload-схему в `schemas/gcn_notice.avsc`, завернуть в тот же конверт.
-3. Добавить топик `ingest.gcn.notices` в `deploy/kafka/create-topics.sh`.
-4. Таблица + (при необходимости) MV в `deploy/clickhouse/init/`.
-5. Консьюмер: либо новый маленький сервис, либо подписка consumer-alerts на второй топик
-   с диспетчеризацией по `source` из конверта.
-6. Сервис в compose (профиль prod), эндпоинт в query-api, вкладка в дашборде.
+1. Copy `services/connector-ztf` → `services/connector-gcn`, implement your own source
+   (for GCN — a `gcn-kafka` consumer; for HTTP sources — a poller).
+2. Describe the payload schema in `schemas/gcn_notice.avsc`, wrap it in the same envelope.
+3. Add the `ingest.gcn.notices` topic to `deploy/kafka/create-topics.sh`.
+4. Table + (if needed) an MV in `deploy/clickhouse/init/`.
+5. Consumer: either a new small service, or subscribe consumer-alerts to the second topic
+   and dispatch by the envelope's `source` field.
+6. Service in compose (prod profile), an endpoint in query-api, a tab in the dashboard.
 
-## Решения и их причины (кратко)
+## Decisions and reasons (in short)
 
-- **Своя Kafka между источником и потребителями**, а не прямое чтение Fink всеми:
-  развязка, свой retention/реплей, единый формат — и это главный учебный паттерн.
-- **Avro без Registry**: индустриальный формат, но минимум инфраструктуры. Registry — понятный
-  следующий шаг, место для него в компоузе очевидно.
-- **aiokafka**, а не confluent-kafka: чистый Python + asyncio, проще ставится на Windows;
-  confluent-kafka (librdkafka) останется для connector-gcn — заодно сравнишь два клиента.
-- **Два compose-файла** (`docker-compose.dev.yml` — только инфраструктура, код на хосте;
-  `docker-compose.prod.yml` — инфраструктура + приложения): каждый читается целиком,
-  без профилей и оверрайдов. VM в VirtualBox — репетиция VDS.
+- **Own Kafka between the source and the consumers** instead of everyone reading Fink
+  directly: decoupling, own retention/replay, a single internal format.
+- **Avro without a Registry**: an industry-standard format with minimal infrastructure.
+  A Registry is an obvious next step and has a clear place in the compose file.
+- **aiokafka** rather than confluent-kafka: pure Python + asyncio, easier to install
+  everywhere; confluent-kafka (librdkafka) remains an option for future connectors.
+- **Two compose files** (`docker-compose.dev.yml` — infrastructure only, code runs on the
+  host; `docker-compose.prod.yml` — infrastructure + applications): each reads as a whole,
+  no profiles or overrides.

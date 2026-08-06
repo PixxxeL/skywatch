@@ -1,6 +1,6 @@
-"""Настройки всех сервисов. Значения берутся из переменных окружения / .env
-(pydantic-settings читает их сам). Один класс на всех — маленький проект,
-дробить по сервисам пока незачем."""
+"""Settings for all services. Values come from environment variables / .env
+(pydantic-settings reads them itself). A single class for everything — the
+project is small, splitting per service is not worth it yet."""
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -13,7 +13,7 @@ class Settings(BaseSettings):
     topic_alerts: str = "ingest.ztf.alerts"
     topic_deadletter: str = "ingest.deadletter"
 
-    # ClickHouse (HTTP-интерфейс)
+    # ClickHouse (HTTP interface)
     clickhouse_url: str = "http://localhost:8123"
     clickhouse_db: str = "skywatch"
     clickhouse_user: str = "skywatch"
@@ -21,7 +21,7 @@ class Settings(BaseSettings):
 
     # connector-ztf
     source_mode: str = "synthetic"  # synthetic | replay | fink
-    synthetic_rate: float = 5.0     # событий/сек
+    synthetic_rate: float = 5.0     # events per second
     data_dir: str = "./data/ztf"
     replay_rate: float = 50.0
     fink_username: str = ""

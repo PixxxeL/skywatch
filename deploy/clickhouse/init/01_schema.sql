@@ -1,33 +1,32 @@
--- Выполняется автоматически при первом старте контейнера ClickHouse.
--- Термины (MergeTree, ORDER BY, партиции, MV) — в docs/BASICS.md, часть 2.
+-- Runs automatically on the first start of the ClickHouse container.
 
 CREATE DATABASE IF NOT EXISTS skywatch;
 
--- Основная таблица алертов.
--- ReplacingMergeTree(ingest_ts): строки с одинаковым (object_id, candidate_id)
--- при фоновом слиянии схлопнутся в одну (останется свежайшая по ingest_ts) —
--- так гасим дубли от at-least-once доставки из Kafka.
+-- Main alerts table.
+-- ReplacingMergeTree(ingest_ts): rows with the same (object_id, candidate_id)
+-- collapse into one during background merges (the freshest by ingest_ts wins) —
+-- this is how we absorb duplicates from at-least-once Kafka delivery.
 CREATE TABLE IF NOT EXISTS skywatch.ztf_alerts
 (
-    object_id       String,                       -- ID объекта у ZTF, напр. ZTF26aaabbbc
-    candidate_id    UInt64,                       -- уникальный ID конкретного измерения
-    event_ts        DateTime64(3, 'UTC'),         -- время наблюдения
-    ingest_ts       DateTime64(3, 'UTC'),         -- время приёма нашим коннектором
-    ra              Float64,                      -- прямое восхождение, град
-    dec             Float64,                      -- склонение, град
-    magpsf          Float32,                      -- звёздная величина (яркость; меньше = ярче)
-    sigmapsf        Float32,                      -- её погрешность
-    fid             UInt8,                        -- фильтр: 1=g (зелёный), 2=r (красный), 3=i
-    classification  LowCardinality(String),       -- класс от Fink: SN candidate, Solar System...
-    class_score     Float32,                      -- уверенность классификатора 0..1
-    raw             String CODEC(ZSTD(3))         -- исходное событие (JSON) на случай перепарсинга
+    object_id       String,                       -- ZTF object ID, e.g. ZTF26aaabbbc
+    candidate_id    UInt64,                       -- unique ID of a single measurement
+    event_ts        DateTime64(3, 'UTC'),         -- observation time
+    ingest_ts       DateTime64(3, 'UTC'),         -- time our connector received the event
+    ra              Float64,                      -- right ascension, degrees
+    dec             Float64,                      -- declination, degrees
+    magpsf          Float32,                      -- magnitude (brightness; lower = brighter)
+    sigmapsf        Float32,                      -- its uncertainty
+    fid             UInt8,                        -- filter: 1=g (green), 2=r (red), 3=i
+    classification  LowCardinality(String),       -- class from Fink: SN candidate, Solar System...
+    class_score     Float32,                      -- classifier confidence 0..1
+    raw             String CODEC(ZSTD(3))         -- original event (JSON) for future re-parsing
 )
 ENGINE = ReplacingMergeTree(ingest_ts)
 PARTITION BY toYYYYMM(event_ts)
 ORDER BY (object_id, candidate_id);
 
--- Агрегаты по дням: наполняются автоматически материализованным вью при каждой вставке.
--- SummingMergeTree складывает cnt у строк с одинаковым ключом при слияниях.
+-- Daily aggregates: filled automatically by a materialized view on every insert.
+-- SummingMergeTree adds up cnt of rows with the same key during merges.
 CREATE TABLE IF NOT EXISTS skywatch.alerts_daily
 (
     day            Date,
@@ -46,5 +45,5 @@ AS SELECT
 FROM skywatch.ztf_alerts
 GROUP BY day, classification;
 
--- Примечание: MV видит только НОВЫЕ вставки, дубли Kafka сюда тоже попадут.
--- Для учебного дашборда это ок; точные цифры — запросом с FINAL по ztf_alerts.
+-- Note: the MV sees only NEW inserts, so Kafka duplicates end up here as well.
+-- Good enough for dashboard trends; for exact numbers query ztf_alerts with FINAL.

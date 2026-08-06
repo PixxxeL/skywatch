@@ -1,7 +1,7 @@
 [project]
 name = "skywatch-common"
 version = "0.0.1"
-description = "Общий код SkyWatch: настройки, конверт, Avro"
+description = "SkyWatch shared code: settings, envelope, Avro"
 requires-python = ">=3.12"
 dependencies = ["fastavro>=1.9", "pydantic-settings>=2.0"]
 

@@ -1,4 +1,4 @@
-# Собирается из КОРНЯ репо (см. build.context в docker-compose.yml).
+# Built from the repo ROOT (see build.context in docker-compose.yml).
 FROM python:3.12-slim
 WORKDIR /app
 COPY services/query-api/requirements.txt .
