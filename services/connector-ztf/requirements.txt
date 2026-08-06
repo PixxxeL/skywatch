@@ -1,0 +1,4 @@
+aiokafka>=0.10
+fastavro>=1.9
+fink-client>=11
+pydantic-settings>=2.0

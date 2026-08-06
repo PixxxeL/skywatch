@@ -1,0 +1,19 @@
+{
+  "type": "record",
+  "name": "ZtfAlertLite",
+  "namespace": "skywatch.ztf",
+  "doc": "Выжимка из полного алерта ZTF (в полном ~60 полей и вырезки изображений). Версия 1.",
+  "fields": [
+    {"name": "object_id", "type": "string"},
+    {"name": "candidate_id", "type": "long"},
+    {"name": "event_ts", "type": {"type": "long", "logicalType": "timestamp-millis"}},
+    {"name": "ra", "type": "double"},
+    {"name": "dec", "type": "double"},
+    {"name": "magpsf", "type": "float"},
+    {"name": "sigmapsf", "type": "float"},
+    {"name": "fid", "type": "int"},
+    {"name": "classification", "type": "string", "default": "unknown"},
+    {"name": "class_score", "type": "float", "default": 0.0},
+    {"name": "raw", "type": "string", "doc": "исходное событие как JSON-строка"}
+  ]
+}

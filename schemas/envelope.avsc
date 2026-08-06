@@ -1,0 +1,15 @@
+{
+  "type": "record",
+  "name": "Envelope",
+  "namespace": "skywatch",
+  "doc": "Единый конверт всех сообщений во внутренних топиках. Поля конверта одинаковы для любого источника; специфика события лежит сериализованной в payload.",
+  "fields": [
+    {"name": "source", "type": "string", "doc": "ztf | gcn | noaa | ..."},
+    {"name": "event_type", "type": "string", "doc": "alert | notice | ..."},
+    {"name": "event_id", "type": "string", "doc": "уникальный ID события у источника"},
+    {"name": "event_ts", "type": {"type": "long", "logicalType": "timestamp-millis"}},
+    {"name": "ingest_ts", "type": {"type": "long", "logicalType": "timestamp-millis"}},
+    {"name": "schema_version", "type": "int", "doc": "версия схемы payload"},
+    {"name": "payload", "type": "bytes", "doc": "тело события, Avro по схеме <source>_<type>_lite.avsc"}
+  ]
+}

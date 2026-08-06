@@ -1,0 +1,19 @@
+# секреты — никогда в гит (креды Fink, пароли ClickHouse)
+.env
+deploy/.env
+
+# python
+.venv/
+__pycache__/
+*.egg-info/
+
+# node
+node_modules/
+services/dashboard/dist/
+
+# данные (архивы алертов ZTF для replay — гигабайты)
+data/
+
+# IDE
+.idea/
+.vscode/

@@ -1,0 +1,86 @@
+# SkyWatch DEV — только инфраструктура (запускается в VirtualBox VM).
+# Код (коннектор, консьюмер, API, дашборд) крутится на Windows-хосте
+# и ходит сюда через проброс портов VirtualBox (127.0.0.1).
+#
+#   cp .env.example .env   # KAFKA_EXTERNAL_HOST=127.0.0.1
+#   docker compose -f docker-compose.dev.yml up -d
+
+services:
+  # ── Kafka в режиме KRaft (без ZooKeeper: с Kafka 3.x внешний координатор не нужен) ──
+  # Официальный образ apache/kafka (bitnami/* удалены с Docker Hub в 2025).
+  kafka:
+    image: apache/kafka:3.9.1
+    environment:
+      KAFKA_NODE_ID: "1"
+      KAFKA_PROCESS_ROLES: broker,controller   # один узел = и брокер, и контроллер
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:9093
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      #
+      # ГРАБЛИ №1 (см. docs/BASICS.md): у брокера ДВА листенера.
+      # INTERNAL — для контейнеров внутри docker-сети (kafka:9092),
+      # EXTERNAL — для кода на Windows-хосте (через проброс портов = 127.0.0.1:29092).
+      # Kafka сообщает клиенту advertised-адрес; если он недостижим — клиент виснет.
+      KAFKA_LISTENERS: INTERNAL://:9092,EXTERNAL://:29092,CONTROLLER://:9093
+      KAFKA_ADVERTISED_LISTENERS: INTERNAL://kafka:9092,EXTERNAL://${KAFKA_EXTERNAL_HOST}:${KAFKA_EXTERNAL_PORT}
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: INTERNAL:PLAINTEXT,EXTERNAL:PLAINTEXT,CONTROLLER:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: INTERNAL
+      #
+      # Учебный одноброкерный кластер: фактор репликации 1 (см. вопросы в docs/BASICS.md).
+      KAFKA_DEFAULT_REPLICATION_FACTOR: "1"
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: "1"
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: "1"
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: "1"
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "false"  # топики только явно, руками
+      #
+      # Куда писать данные (совпадает с volume ниже); CLUSTER_ID — любой валидный
+      # base64-uuid, фиксируем, чтобы формат хранилища был воспроизводимым.
+      KAFKA_LOG_DIRS: /var/lib/kafka/data
+      CLUSTER_ID: 4L6g3nShT-eMCtK--X86sw
+    ports:
+      - "${KAFKA_EXTERNAL_PORT}:29092"
+    volumes:
+      - kafka_data:/var/lib/kafka/data
+    healthcheck:
+      test: ["CMD-SHELL", "/opt/kafka/bin/kafka-topics.sh --bootstrap-server localhost:9092 --list"]
+      interval: 10s
+      timeout: 10s
+      retries: 10
+
+  # Топики в dev создаются РУКАМИ (учебное упражнение, см. README);
+  # в prod это делает одноразовый контейнер kafka-init (docker-compose.prod.yml).
+
+  # Веб-интерфейс: топики, сообщения, consumer groups, lag. Главный учебный инструмент.
+  kafka-ui:
+    image: provectuslabs/kafka-ui:latest
+    depends_on:
+      kafka:
+        condition: service_healthy
+    environment:
+      KAFKA_CLUSTERS_0_NAME: skywatch
+      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka:9092
+    ports:
+      - "8085:8080"
+
+  clickhouse:
+    image: clickhouse/clickhouse-server:24.8
+    environment:
+      CLICKHOUSE_USER: ${CLICKHOUSE_USER}
+      CLICKHOUSE_PASSWORD: ${CLICKHOUSE_PASSWORD}
+      CLICKHOUSE_DEFAULT_ACCESS_MANAGEMENT: "1"
+    ports:
+      - "8123:8123"   # HTTP-интерфейс (и веб-консоль /play)
+    volumes:
+      - ch_data:/var/lib/clickhouse
+      # Схема БД в dev накатывается РУКАМИ (учебное упражнение, см. README).
+      # В prod каталог clickhouse/init/ монтируется в /docker-entrypoint-initdb.d
+      # и выполняется автоматически при первом старте (docker-compose.prod.yml).
+    ulimits:
+      nofile: { soft: 262144, hard: 262144 }
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8123/ping"]
+      interval: 10s
+      retries: 10
+
+volumes:
+  kafka_data:
+  ch_data:
