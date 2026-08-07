@@ -8,14 +8,21 @@ Serialization — Avro. Schemas live in schemas/*.avsc.
 """
 
 import io
+import os
 import time
 from dataclasses import dataclass
 from pathlib import Path
 
 import fastavro
 
-# schemas/ lives in the repo root: services/common/skywatch_common/ -> ../../..
-SCHEMAS_DIR = Path(__file__).resolve().parents[3] / "schemas"
+# In a repo checkout schemas/ lives in the repo root
+# (services/common/skywatch_common/ -> ../../..). In a container the package is
+# pip-installed into site-packages, so the relative path breaks — there the
+# location is set explicitly via SKYWATCH_SCHEMAS_DIR (see the Dockerfiles).
+SCHEMAS_DIR = Path(
+    os.environ.get("SKYWATCH_SCHEMAS_DIR")
+    or Path(__file__).resolve().parents[3] / "schemas"
+)
 
 
 def load_schema(name: str) -> dict:

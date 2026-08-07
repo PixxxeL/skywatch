@@ -6,5 +6,6 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY services/common ./services/common
 COPY schemas ./schemas
 RUN pip install --no-cache-dir ./services/common
+ENV SKYWATCH_SCHEMAS_DIR=/app/schemas
 COPY services/query-api/query_api ./query_api
 CMD ["uvicorn", "query_api.main:app", "--host", "0.0.0.0", "--port", "8000"]

@@ -7,5 +7,6 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY services/common ./services/common
 COPY schemas ./schemas
 RUN pip install --no-cache-dir ./services/common
+ENV SKYWATCH_SCHEMAS_DIR=/app/schemas
 COPY services/connector-ztf/connector_ztf ./connector_ztf
 CMD ["python", "-m", "connector_ztf"]
