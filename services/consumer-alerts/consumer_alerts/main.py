@@ -71,7 +71,7 @@ async def run():
     consumer = aiokafka.AIOKafkaConsumer(
         settings.topic_alerts,
         bootstrap_servers=settings.kafka_bootstrap,
-        group_id=f'{settings.consumer_group}-test',
+        group_id=settings.consumer_group,
         auto_offset_reset='earliest',
         enable_auto_commit=False
     )
