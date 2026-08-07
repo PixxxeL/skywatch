@@ -8,6 +8,9 @@ import { FILTER_LABELS } from '../labels'
 const FILTER_COLORS: Record<number, string> = { 1: '#84bf9a', 2: '#c98c8c' }
 const GRID = '#2b2b2f'
 
+const toMs = (ts: string) => Date.parse(ts.replace(' ', 'T') + (ts.endsWith('Z') ? '' : 'Z'))
+const fmt = (ms: number, len: number) => new Date(ms).toISOString().slice(len, 16).replace('T', ' ')
+
 const selection = useSelectionStore()
 const canvas = ref<HTMLCanvasElement>()
 let chart: Chart | null = null
@@ -24,7 +27,7 @@ watch(() => selection.objectId, async objectId => {
         showLine: true,
         data: points
             .filter(p => p.fid === Number(fid))
-            .map(p => ({ x: p.event_ts.slice(0, 16), y: p.magpsf })),
+            .map(p => ({ x: toMs(p.event_ts), y: p.magpsf })),
     })).filter(ds => ds.data.length)
     chart?.destroy()
     chart = new Chart(canvas.value!, {
@@ -36,13 +39,21 @@ watch(() => selection.objectId, async objectId => {
             plugins: {
                 tooltip: {
                     callbacks: {
+                        title: items => fmt(items[0].parsed.x, 0),
                         footer: items =>
                             items.map(i => FILTER_LABELS[i.dataset.label === 'g' ? 1 : 2].full).join('\n'),
                     },
                 },
             },
             scales: {
-                x: { type: 'category', grid: { color: GRID } },
+                x: {
+                    type: 'linear',
+                    grid: { color: GRID },
+                    ticks: {
+                        maxRotation: 0,
+                        callback: value => fmt(Number(value), 5),
+                    },
+                },
                 y: {
                     reverse: true,
                     title: { display: true, text: 'magpsf' },
