@@ -116,6 +116,7 @@ onUnmounted(() => {
 <style lang="sass" scoped>
 .toolbar
     display: flex
+    flex-wrap: wrap
     align-items: center
     gap: 16px
     margin-bottom: 12px
@@ -130,9 +131,16 @@ onUnmounted(() => {
         align-items: center
         gap: 6px
 
+    @media (max-width: 640px)
+        gap: 10px 12px
+
+        h2
+            flex: 1 1 100%
+
 .scroll
     max-height: 340px
-    overflow-y: auto
+    overflow: auto
+    -webkit-overflow-scrolling: touch
 
 tbody tr
     cursor: pointer

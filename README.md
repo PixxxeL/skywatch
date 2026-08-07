@@ -2,6 +2,10 @@
 
 Ingestion of astronomical events (ZTF alerts via the Fink broker), storage and analytics, dashboard.
 
+<p align="center">
+  <img src="docs/dashboard.png" alt="SkyWatch dashboard" width="100%">
+</p>
+
 New sources (GCN, NOAA, etc.) are added as separate connectors without touching the core.
 See [ARCHITECTURE.md](ARCHITECTURE.md) for details.
 

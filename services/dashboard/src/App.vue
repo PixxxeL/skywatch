@@ -42,6 +42,7 @@ const poll = usePollStore()
 <style lang="sass" scoped>
 .header
     display: flex
+    flex-wrap: wrap
     align-items: baseline
     gap: 12px
     padding: 18px 24px 6px
@@ -60,6 +61,14 @@ const poll = usePollStore()
         align-items: center
         gap: 6px
 
+    @media (max-width: 640px)
+        gap: 6px 12px
+        padding: 14px 16px 4px
+
+        .sub
+            flex: 1 1 100%
+            order: 3
+
 .grid
     display: grid
     grid-template-columns: 3fr 1fr 1fr 3fr
@@ -68,4 +77,18 @@ const poll = usePollStore()
 
     .wide
         grid-column: span 4
+
+    @media (max-width: 1024px)
+        grid-template-columns: 1fr 1fr
+
+        .wide
+            grid-column: span 2
+
+    @media (max-width: 640px)
+        grid-template-columns: 1fr
+        gap: 12px
+        padding: 12px 12px 16px
+
+        .wide
+            grid-column: span 1
 </style>
