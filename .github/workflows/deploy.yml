@@ -81,5 +81,5 @@ jobs:
           script: |
             cd /opt/skywatch/deploy
             docker compose -f docker-compose.registry.yml pull
-            docker compose -f docker-compose.registry.yml up -d
+            docker compose -f docker-compose.registry.yml up -d --remove-orphans
             docker image prune -f

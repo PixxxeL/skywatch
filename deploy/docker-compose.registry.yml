@@ -28,6 +28,8 @@ services:
       KAFKA_AUTO_CREATE_TOPICS_ENABLE: "false"
       KAFKA_LOG_DIRS: /var/lib/kafka/data
       CLUSTER_ID: 4L6g3nShT-eMCtK--X86sw
+      # Default heap is 1G — far too much for this stream on a 2 GB VDS.
+      KAFKA_HEAP_OPTS: "-Xmx384m -Xms384m"
     ports:
       - "127.0.0.1:29092:29092"
     volumes:
@@ -50,14 +52,18 @@ services:
     volumes:
       - ./kafka/create-topics.sh:/create-topics.sh:ro
 
+  # Not started by default (~350 MB of JVM). When needed:
+  #   docker compose -f docker-compose.registry.yml --profile debug up -d kafka-ui
   kafka-ui:
     image: provectuslabs/kafka-ui:latest
+    profiles: ["debug"]
     depends_on:
       kafka:
         condition: service_healthy
     environment:
       KAFKA_CLUSTERS_0_NAME: skywatch
       KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka:9092
+      JAVA_OPTS: "-Xmx256m"
     ports:
       - "127.0.0.1:8085:8080"   # view from the VDS via an ssh tunnel: ssh -L 8085:127.0.0.1:8085
     restart: unless-stopped
@@ -75,6 +81,7 @@ services:
     volumes:
       - ch_data:/var/lib/clickhouse
       - ./clickhouse/init:/docker-entrypoint-initdb.d:ro
+      - ./clickhouse/config.d/memory.xml:/etc/clickhouse-server/config.d/zz-memory.xml:ro
     ulimits:
       nofile: { soft: 262144, hard: 262144 }
     healthcheck:

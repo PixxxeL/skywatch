@@ -1,0 +1,7 @@
+<!-- Memory cap for a small (2 GB) VDS shared with Kafka and the app services.
+     0.35 of host RAM ≈ 700 MB. ClickHouse degrades queries gracefully at this
+     limit instead of getting OOM-killed. -->
+<clickhouse>
+    <max_server_memory_usage_ratio>0.35</max_server_memory_usage_ratio>
+    <mark_cache_size>134217728</mark_cache_size>
+</clickhouse>
